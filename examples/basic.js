@@ -1,7 +1,8 @@
 "use strict";
 
+const { sendEETRequest } = require('../dist/index');
+
 const fs = require('fs');
-const { createClient } = require('../src');
 
 
 const PRIVATE_KEY = fs.readFileSync('./test/certificate-CZ1212121218/private.pem');
@@ -12,9 +13,7 @@ const options = {
 	privateKey: PRIVATE_KEY,
 	certificate: CERTIFICATE,
 	playground: true,
-	timeout: 2000,
-	measureResponseTime: true,
-	offline: true,
+	timeout: 3000,
 };
 
 const items = {
@@ -43,20 +42,10 @@ const items = {
 
 };
 
-
-createClient(options)
-	.then(client => {
-
-		client.request(items)
-			.then(({ request, response }) => {
-
-				console.log('ok', response);
-
-			})
-			.catch(err => {
-
-				console.error('error', err);
-
-			})
-
+sendEETRequest(items, options)
+	.then(({ response }) => {
+		console.log('ok', response);
+	})
+	.catch(err => {
+		console.error('error', err);
 	});

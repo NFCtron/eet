@@ -10,30 +10,41 @@
     "elektronická evidence tržeb",
     "sales evidence"
   ],
-  "homepage": "https://github.com/NFCtron/eet#readme",
+  "homepage": "https://github.com/NFCtron/node-eet#readme",
   "bugs": {
-    "url": "https://github.com/NFCtron/eet/issues"
+    "url": "https://github.com/NFCtron/node-eet/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/NFCtron/eet.git"
+    "url": "https://github.com/NFCtron/node-eet.git"
   },
   "license": "MIT",
   "author": {
-    "name": "Jakub Mrozek",
-    "email": "jakub.mrozek@gmail.com",
-    "url": "http://www.ronnieweb.net/"
+    "name": "Martin Endler",
+    "url": "https://github.com/pokusew"
   },
   "contributors": [
     {
-      "name": "Martin Endler",
-      "url": "https://github.com/pokusew"
+      "name": "Petr Zahradnik",
+      "url": "https://github.com/petrzjunior"
+    },
+    {
+      "name": "Jakub Mrozek",
+      "email": "jakub.mrozek@gmail.com",
+      "url": "http://www.ronnieweb.net/"
     }
   ],
   "main": "dist/index.js",
+  "types": "src/index.d.ts",
+  "files": [
+    "src/*.js",
+    "src/index.d.ts",
+    "dist/*.js"
+  ],
   "scripts": {
     "build": "babel src --out-dir dist",
-    "test": "cross-env NODE_ENV=test ava test/tests.js --verbose"
+    "test": "cross-env NODE_ENV=test nyc ava --verbose",
+    "test-hot": "cross-env NODE_ENV=test ava --verbose --watch"
   },
   "ava": {
     "babel": {
@@ -41,24 +52,34 @@
         "babelrc": true
       }
     },
+    "files": [
+      "test/*",
+      "!test/performance.js"
+    ],
     "require": [
       "@babel/register"
     ]
   },
+  "nyc": {
+    "instrument": false,
+    "sourceMap": false
+  },
   "dependencies": {
-    "soap": "^0.31.0",
-    "uuid": "^7.0.1",
-    "xml-crypto": "^1.4.0"
+    "fast-xml-parser": "^3.16.0",
+    "node-fetch": "^2.6.0",
+    "uuid": "^7.0.2"
   },
   "devDependencies": {
     "@ava/babel": "^1.0.1",
     "@babel/cli": "^7.8.4",
-    "@babel/core": "^7.8.6",
-    "@babel/plugin-proposal-class-properties": "^7.8.3",
-    "@babel/plugin-proposal-object-rest-spread": "^7.8.3",
+    "@babel/core": "^7.8.7",
+    "@babel/plugin-proposal-nullish-coalescing-operator": "^7.8.3",
+    "@babel/plugin-proposal-optional-chaining": "^7.9.0",
     "@babel/plugin-transform-modules-commonjs": "^7.8.3",
     "@babel/register": "^7.8.6",
-    "ava": "^3.4.0",
-    "cross-env": "^7.0.0"
+    "ava": "^3.5.1",
+    "babel-plugin-istanbul": "^6.0.0",
+    "cross-env": "^7.0.2",
+    "nyc": "^15.0.0"
   }
 }

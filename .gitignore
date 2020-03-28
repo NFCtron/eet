@@ -36,3 +36,6 @@ node_modules/
 
 # temp files
 /temp/
+
+# nyc code coverage
+/.nyc_output

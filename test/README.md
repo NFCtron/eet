@@ -8,4 +8,13 @@ You can run tests with:
 yarn test
 ```
 
-It is a shortcut for `cross-env NODE_ENV=test ava test/tests.js --verbose` which runs all the tests defined in tests.js file.
+It is a shortcut for `cross-env NODE_ENV=test nyc ava test/tests.js --verbose`
+which runs all the tests defined in tests.js file and prints the tests coverage using [nyc](https://github.com/istanbuljs/nyc).
+
+For re-running tests whenever you change the sources, you can use:
+
+```bash
+yarn test-hot
+```
+
+It is a shortcut for `cross-env NODE_ENV=test ava test/tests.js --verbose --watch`.

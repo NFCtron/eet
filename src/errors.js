@@ -1,49 +1,52 @@
 "use strict";
 
+// server returned error
+export class ResponseServerError extends Error {
 
-export class BaseError extends Error {
-
-	constructor(code, message, previousError) {
+	constructor(message, code, datOdmit) {
 
 		super(message);
-
+		this.code = code;
+		this.datOdmit = datOdmit;
 		Error.captureStackTrace(this, this.constructor);
 
-		this.name = 'BaseError';
+	}
 
-		if (!message && previousError) {
-			this.message = previousError.message;
-		}
+}
 
+// response could not be parsed
+export class ResponseParsingError extends Error {
+
+	constructor(message, code, line) {
+
+		super(message);
 		this.code = code;
-
-		if (previousError) {
-			this.previous = previousError;
-		}
+		this.line = line;
+		Error.captureStackTrace(this, this.constructor);
 
 	}
 
 }
 
-export class ValidationError extends BaseError {
+// request could not be parsed
+export class RequestParsingError extends Error {
 
-	constructor(code, message, previousError) {
+	constructor(message) {
 
-		super(code, message, previousError);
-
-		this.name = 'ValidationError';
+		super(message);
+		Error.captureStackTrace(this, this.constructor);
 
 	}
 
 }
 
-export class ResponseError extends BaseError {
+// server sent wrong or unexpected response
+export class WrongServerResponse extends Error {
 
-	constructor(code, message, previousError) {
+	constructor(message) {
 
-		super(code, message, previousError);
-
-		this.name = 'ResponseError';
+		super(message);
+		Error.captureStackTrace(this, this.constructor);
 
 	}
 

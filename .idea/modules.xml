@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/eet.iml" filepath="$PROJECT_DIR$/.idea/eet.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/node-eet.iml" filepath="$PROJECT_DIR$/.idea/node-eet.iml" />
     </modules>
   </component>
 </project>

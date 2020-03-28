@@ -1,16 +1,19 @@
 "use strict";
 
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidV4 } from 'uuid';
 import {
 	convertAmountToString,
 	convertBooleanToString,
-	convertDateToString, isDefined, validateAmount,
+	convertDateToString,
+	isDefined,
+	validateAmount,
+	validateCzVatId,
 	validateIdPokl,
 	validateIdProvoz,
 	validatePoradCis,
-	validateVatId,
+	validateUuidV4,
 } from './utils';
-import { ValidationError } from './errors';
+import { RequestParsingError } from './errors';
 
 
 export const SCHEMA = {
@@ -18,8 +21,8 @@ export const SCHEMA = {
 		type: 'header',
 		name: 'uuid_zpravy',
 		required: true,
-		getDefault: () => uuidv4(),
-		// TODO: validate
+		getDefault: () => uuidV4(),
+		validate: validateUuidV4,
 	},
 	datOdesl: {
 		type: 'header',
@@ -49,19 +52,20 @@ export const SCHEMA = {
 		type: 'data',
 		name: 'dic_popl',
 		required: true,
-		validate: validateVatId,
+		validate: validateCzVatId,
 	},
 	dicPoverujiciho: {
 		type: 'data',
 		name: 'dic_poverujiciho',
 		required: false,
-		validate: validateVatId,
+		validate: validateCzVatId,
 	},
 	idProvoz: {
 		type: 'data',
 		name: 'id_provoz',
 		required: true,
 		validate: validateIdProvoz,
+		format: value => value.toString(),
 	},
 	idPokl: {
 		type: 'data',
@@ -185,7 +189,8 @@ export const SCHEMA = {
 		name: 'rezim',
 		required: true,
 		getDefault: () => 0,
-		validate: value => value !== 0 || value !== 1,
+		validate: value => value === 0 || value === 1,
+		format: value => value.toString(),
 	},
 };
 
@@ -193,29 +198,30 @@ export const SCHEMA = {
 export const parseRequest = request => {
 
 	if (!isDefined(request) || typeof request !== 'object') {
-		throw new ValidationError('invalid_request', 'Invalid request data given. Data must be a non-null object.');
+		throw new RequestParsingError('Invalid request data given. Data must be a non-null object.', request);
 	}
 
-	const result = {};
+	// TODO: consider using Map of Maps instead of plain object
+	const result = {
+		header: {},
+		data: {},
+	};
 
 	for (const [key, {
 		type,
 		name,
-		required = false,
+		required,
 		getDefault,
-		validate = () => true,
+		validate,
 		format = value => value
 	}] of Object.entries(SCHEMA)) {
 
-		// mutates the request object
-		if (!isDefined(request[key]) && isDefined(getDefault)) {
-			request[key] = getDefault();
-		}
-
-		const value = request[key];
+		const value = !isDefined(request[key]) && isDefined(getDefault)
+			? getDefault()
+			: request[key];
 
 		if (required && !isDefined(value)) {
-			throw new ValidationError(name, `${key} must be set.`);
+			throw new RequestParsingError(`${key} must be set.`, request);
 		}
 
 		if (!isDefined(value)) {
@@ -223,11 +229,7 @@ export const parseRequest = request => {
 		}
 
 		if (!validate(value)) {
-			throw new ValidationError(name, `Validation failed for ${key}. '${value}' given.`);
-		}
-
-		if (!result[type]) {
-			result[type] = {};
+			throw new RequestParsingError(`Validation failed for ${key}. '${value}' given.`, value);
 		}
 
 		result[type][name] = format(value);

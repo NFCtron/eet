@@ -1,4 +1,4 @@
-# eet
+# @nfctron/eet
 
 [![npm](https://img.shields.io/npm/v/@nfctron/eet.svg)](https://www.npmjs.com/package/@nfctron/eet)
 [![build status](https://img.shields.io/github/workflow/status/NFCtron/eet/CI?logo=github)](https://github.com/NFCtron/eet/actions?query=workflow%3ACI)
@@ -6,6 +6,7 @@
 
 Node.js library for EET ([Electronic Registration of Sales](http://www.etrzby.cz/assets/cs/prilohy/EET_popis_rozhrani_v3.1.1_EN.pdf) in the Czech Republic) ([Elektronickou evidenci tržeb](http://www.etrzby.cz/cs/technicka-specifikace)).
 
+Fast, simple and almost [no dependencies](http://npm.broofa.com/?q=@nfctron/eet).
 
 ## Content
 
@@ -19,10 +20,16 @@ Node.js library for EET ([Electronic Registration of Sales](http://www.etrzby.cz
   - [Using OpenSSL CLI](#using-openssl-cli)
   - [Using Node.js library pem](#using-nodejs-library-pem)
 - [API](#api)
-  - [createClient(options)](#createclientoptions)
-  - [EETClient.request(items)](#eetclientrequestitems)
-- [Frequent errors](#frequent-errors)
-  - [Neplatny podpis SOAP zpravy (4)](#neplatny-podpis-soap-zpravy-4)
+- [Error handling](#error-handling)
+  - [RequestParsingError(message)](#requestparsingerrormessage)
+  - [Fetch errors](#fetch-errors)
+  - [ResponseParsingError(message, code, line)](#responseparsingerrormessage-code-line)
+  - [WrongServerResponse(message)](#wrongserverresponsemessage)
+  - [ResponseServerError(message, code)](#responseservererrormessage-code)
+- [FAQ](#faq)
+  - [Can this library be used directly in the browser?](#can-this-library-be-used-directly-in-the-browser)
+- [Missing features](#missing-features)
+  - [Verifying response signature](#verifying-response-signature)
 - [License](#license)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
@@ -30,7 +37,7 @@ Node.js library for EET ([Electronic Registration of Sales](http://www.etrzby.cz
 
 ## Installation 
 
-**Requirements:** **at least Node.js 8 or newer**
+**Requirements:** **at least Node.js 10 or newer**
 
 Using npm:
 
@@ -48,38 +55,60 @@ yarn add @nfctron/eet
 ## Example usage
 
 ```javascript
-const { createClient } = require('eet');
+const { sendEETRequest } = require('@nfctron/eet');
+
+// for example: you can load private key and certificate from file
+// note: do not use readFileSync in the server
+//       because it will block the entire process until it completes
+//       use an asynchronous readFile instead
+//       (or load it from database or whatever works best for your use-case)
+const fs = require('fs');
+const PRIVATE_KEY = fs.readFileSync('path/to/private-key.pem');
+const CERTIFICATE = fs.readFileSync('path/to/certificate.pem');
 
 const options = {
-	privateKey: '...',
-	certificate: '...',
+	privateKey: PRIVATE_KEY,
+	certificate: CERTIFICATE,
 	playground: true,
 };
 
 const items = {
 	dicPopl: 'CZ1212121218',
-	idPokl: '/5546/RO24',
+	idProvoz: 273,
+	idPokl: '/554/RO24',
 	poradCis: '0/6460/ZQ42',
 	datTrzby: new Date(),
-	celkTrzba: 34113, // 341.13 CZK expressed in hundredths (haléře, aka cents)
-	idProvoz: 273,
+	celkTrzba: 12100, // 121.00 CZK
+	zaklDan1: 10000, // 100.00 CZK
+	dan1: 2100, // 21.00 CZK
 };
 
-// send request to obtain the FIK using async/await (Node.js 8+ / Babel)
-
-const client = await createClient(options);
-
+// send request to obtain the FIK using async/await
 try {
-	const { fik } = await client.request(items);
+	const { response } = await sendEETRequest(items, options);
+	console.log('ok', response);
+	// the response looks like:
+	// {
+	//   uuidZpravy: '2dadefae-9926-403a-ace5-78f61a7a7882',
+	//   datPrij: 2020-03-27T20:51:48.000Z,
+	//   bkp: '032faa83-168bc061-4630c051-fce41ffa-dbc90815',
+	//   test: true,
+	//   fik: '09dfc04d-9e71-413a-9465-46bcf8ef3d0d-fa',
+	//   warnings: []
+	// }
+}
+catch (e) {
+	console.error(e);
 }
 
-// send request to obtain the FIK using raw Promises
-createClient(options)
-	.then(client => client.request(items))
-	.then((({ request, response }) => {
-		// request contains complete data object sent to EET
-		// response.fik
-	}));
+// alternatively you can use raw Promises ...
+sendEETRequest(items, options)
+	.then(({ response }) => {
+		console.log('ok', response);
+	})
+	.catch(err => {
+		console.error('error', err);
+	});
 ```
 
 
@@ -99,7 +128,7 @@ certificate and private key. You'll be prompted to enter the password of the PKC
 In case of testing certificates downloaded from etrzby.cz, it is `eet`.
 
 ```bash
-openssl pkcs12 -in original.p12 -clcerts -nocerts -nodes | openssl rsa > privkey.key
+openssl pkcs12 -in original.p12 -nocerts -nodes -out privkey.key
 openssl pkcs12 -in original.p12 -clcerts -nokeys -out cert.pem
 ```
 
@@ -110,8 +139,9 @@ For example using package [pem](https://github.com/andris9/pem):
 
 ```javascript
 const pem = require('pem');
+const fs = require('fs');
 
-const file = require('fs').readFileSync('path/to/certificate.p12');
+const file = fs.readFileSync('path/to/certificate.p12');
 const password = '...'; // testing certificates downloaded from etrzby.cz have password 'eet'
 
 pem.readPkcs12(file, { p12Password: password }, (err, result) => {
@@ -124,36 +154,88 @@ pem.readPkcs12(file, { p12Password: password }, (err, result) => {
 
 ## API
 
+Public API is documented using a **TypeScript definition** in [src/index.d.ts](/src/index.d.ts).
+All notable options and values and their behavior is described in comments.
 
-### createClient(options)
-
-|        name         |  type   | required | default |                                                      description                                                       |
-|---------------------|---------|----------|---------|------------------------------------------------------------------------------------------------------------------------|
-| **privateKey**      | string  | **yes**  |         | private key for the certificate                                                                                        |
-| **certificate**     | string  | **yes**  |         | certificate                                                                                                            |
-| offline             | boolean | no       | false   | if true, includes PKP and BKB in response on unsuccessful request to EET                                               |
-| playground          | boolean | no       | false   | use Playground EET endpoint instead of production                                                                      |
-| timeout             | number  | no       | 2000 ms | maximal time to wait in milliseconds                                                                                   |
-| measureResponseTime | boolean | no       | false   | measure response time using node-soap's [client.lastElapsedTime](https://github.com/vpulim/node-soap#options-optional) |
-| httpClient          | object  | no       |         | see [soap options](https://github.com/vpulim/node-soap#options), just for testing                                      |
-
-
-### EETClient.request(items)
-
-* *items* - data to send in EET request, same name as in EET specification but in camel case (so instead of `dic_popl` use `dicPopl`)
-
-	**TODO** add table of items (required, data type, and description)
+The core function is `sendEETRequest(request, options)`
+which handles **the complete flow of sending an EET request**:
+1. it validates all request items and ensures that they match the schema
+2. it generates PKP and BKP
+3. it constructs SOAP XML request
+4. it sends the request using [node-fetch](https://github.com/node-fetch/node-fetch)
+5. it tries to parse the XML response
+6. it validates the parsed response
+    (and checks that uuidZpravy and bkp matches, but [signature is not verified]((#verifying-response-signature)))
+7. finally it returns the response that contains the FIK
 
 
-TODO document whole API
+## Error handling
+
+There are several types of errors that can be thrown during the complete flow:
+1. in case that the validation in `parseRequst` detects invalid request data items,
+    [RequestParsingError](#requestparsingerrormessage) is thrown
+2. in case that invalid values were passed to `options.privateKey` and/or  `options.certificate`,
+    a Node.js's crypto Error may be thrown
+3. network failure, timeout, etc. may cause [Fetch errors](#fetch-errors) to be thrown
+4. during response parsing [ResponseParsingError](#responseparsingerrormessage-code-line) and [WrongServerResponse](#wrongserverresponsemessage) may be thrown
+5. finally if EET server returned an error, it will be thrown as [ResponseServerError](#responseservererrormessage-code)
+
+The errors in **cases 3, 4 and 5** will always contain **generated BKP and PKP codes** (`err.bkp` and `err.pkp`) that can be **used as "offline" response**.
+
+### RequestParsingError(message)
+
+Request parameter is empty, doesn't contain all required items or there is an invalid value for some field.
+Check if all required items are supplied in the correct format as specified in the [TypeScript definition](/src/index.d.ts)
+and in the [EET docs](https://www.etrzby.cz/assets/cs/prilohy/EET_popis_rozhrani_v3.1.1.pdf).
+
+### Fetch errors
+
+[FetchError](https://github.com/node-fetch/node-fetch/blob/master/docs/ERROR-HANDLING.md) comes from [node-fetch](https://github.com/node-fetch/node-fetch) library, 
+every error is rethrown with extra `bkp` and `pkp` fields that can be used as "offline" response.
+
+### ResponseParsingError(message, code, line)
+
+EET server responded with an XML, that could not be even parsed.
+XML parsing is done using [fast-xml-parser](https://github.com/NaturalIntelligence/fast-xml-parser)
+and the `message`, `code` and `line` are the values from parser.validate err object.
+
+This error will always contain extra `bkp` and `pkp` fields that can be used as "offline" response.
+
+### WrongServerResponse(message)
+
+EET server responded with an invalid XML or didn't return required fields.
+
+This error will always contain extra `bkp` and `pkp` fields that can be used as "offline" response.
+
+### ResponseServerError(message, code)
+
+EET server returned <Error> tag. All possible error are specified in the [EET docs](https://www.etrzby.cz/assets/cs/prilohy/EET_popis_rozhrani_v3.1.1.pdf).
+
+Most notably *Neplatny podpis SOAP zpravy (4)* means
+that private key or certificate are in wrong format or the certificate may be invalid (expired, revoked, etc.).
+They need to begin with `-----BEGIN RSA PRIVATE KEY-----` and `-----BEGIN CERTIFICATE-----` respectively.
+
+This error will always contain extra `bkp` and `pkp` fields that can be used as "offline" response.
 
 
-## Frequent errors
+## FAQ
 
-### Neplatny podpis SOAP zpravy (4)
+### Can this library be used directly in the browser?
 
-It is probably due the invalid certificate. Check that the certificate file starts with `-----BEGIN CERTIFICATE-----`.
-If not, remove any preceding text (e.g. Bag Attributes ...).
+Currently, it is not possible. But it could be done:
+1. CORS > must be disabled in the browser or all requests must be sent via a proxy
+2. `process.hrtime.bigint()` > can be easily replaced
+3. Node.js crypto in [src/crypto.js](/src/crypto.js) > can be easily replaced by [SubtleCrypto.digest](https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/digest) the Web Crypto API
+4. node-fetch > not needed as Fetch API is available in the browser
+
+
+## Missing features
+
+### Verifying response signature
+
+All communication must be digitally signed. Currently we are unable to transform response XML into the canonical form 
+in order to verify sender's signature. However a `rawResponse` field is returned, so it can be saved and verified later.
+Nevertheless all communication is encrypted and verified via HTTPS/TLS, so it is very difficult to forge response.
 
 
 ## License
